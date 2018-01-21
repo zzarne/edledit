@@ -265,8 +265,6 @@ class MainWindow(QMainWindow):
         return
 
     def mediaStatusChanged(self, state):
-        print "dbg: mediaStatusChanged(%d)" % state
-
         if state == QMediaPlayer.EndOfMedia:
             self.ui.actionPlayPause.setEnabled(False)
             self.mediaObject.setPosition(self.mediaObject.position())
@@ -292,13 +290,11 @@ class MainWindow(QMainWindow):
             self.mediaObject.stop()
 
     def tick(self, timeMs=None):
-        print "tick:", timeMs
         if timeMs is None:
             if self.mediaObject.isVideoAvailable():
                 timeMs = self.mediaObject.position()
             else:
                 timeMs = 0
-            print "    timeMs:", timeMs
 
         self.ui.timeEditCurrentTime.setTime(QtCore.QTime(0, 0).addMSecs(timeMs))
         self.ui.edlWidget.tick(timeMs)
