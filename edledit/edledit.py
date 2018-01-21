@@ -25,7 +25,7 @@ import os
 from datetime import timedelta
 
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QComboBox, QLabel, QTimeEdit, QAbstractSpinBox, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QComboBox, QLabel, QTimeEdit, QAbstractSpinBox, QMessageBox, QFileDialog
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 
 import pyedl
@@ -384,13 +384,11 @@ class MainWindow(QMainWindow):
         exts = ["*" + ext for (ext, mt) in mimetypes.types_map.items()
                 if mt.startswith("video/")]
         exts = " ".join(exts)
-        lastFolder = self.settings.value("last-folder").toString()
-        fileName = QtGui.QFileDialog.getOpenFileName(
+        lastFolder = self.settings.value("last-folder", ".")
+        fileName, selectedFilter = QFileDialog.getOpenFileName(
             self, tr("Select movie file to open"), lastFolder,
-            tr("All Movie Files (%s);;All Files (*.*)") % exts)
+            tr("All Movie Files (%s);;All Files (*)") % exts)
         if fileName:
-            # unicode() to convert from QString
-            fileName = unicode(fileName)
             # save directory so next getOpenFileName will be in same dir
             self.settings.setValue("last-folder", os.path.split(fileName)[0])
             self.loadMovie(fileName)
