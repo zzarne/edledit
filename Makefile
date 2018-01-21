@@ -28,18 +28,18 @@ clean:
 ui: $(UI_SOURCES)
 
 $(SRCDIR)/edledit_ui.py: $(SRCDIR)/edledit.ui
-	pyuic4 -x -o $@ $<
+	pyuic5 -x -o $@ $<
 
 $(SRCDIR)/edledit_about_ui.py: $(SRCDIR)/edledit_about.ui
-	pyuic4 -x -o $@ $<
+	pyuic5 -x -o $@ $<
 
 $(SRCDIR)/edledit_license_ui.py: $(SRCDIR)/edledit_license.ui
-	pyuic4 -x -o $@ $<
+	pyuic5 -x -o $@ $<
 
 tr: $(SRCDIR)/translations/edledit_fr.qm
 
 $(SRCDIR)/translations/edledit_fr.ts: $(SOURCES)
-	pylupdate4 -verbose $(SOURCES) -ts $@
+	pylupdate5 -verbose $(SOURCES) -ts $@
 
 $(SRCDIR)/translations/edledit_fr.qm: $(SRCDIR)/translations/edledit_fr.ts
 	lrelease $<
@@ -47,7 +47,7 @@ $(SRCDIR)/translations/edledit_fr.qm: $(SRCDIR)/translations/edledit_fr.ts
 res: $(RC_SOURCES)
 
 $(SRCDIR)/edledit_rc.py: $(SRCDIR)/edledit.qrc
-	pyrcc4 -o $@ $<
+	pyrcc5 -o $@ $<
 
 sdist: all
 	rm -f MANIFEST

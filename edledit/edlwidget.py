@@ -14,8 +14,9 @@
 # You should have received a copy of the GNU General Public License
 # along with edledit.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import Qt
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWidget
 
 import pyedl
 
@@ -25,14 +26,15 @@ def timedelta2ms(td):
 HCURSOR = 5
 WCURSOR = 5
 
-class EDLWidget(QtGui.QWidget):
+#class EDLWidget(QtGui.QWidget):
+class EDLWidget(QWidget):
 
     # signals
 
     seek = QtCore.pyqtSignal('qint64')
 
     def __init__(self, *args, **kwargs):
-        QtGui.QWidget.__init__(self, *args, **kwargs)
+        QWidget.__init__(self, *args, **kwargs)
         self.__edl = None
         self.__totalTime = None # ms
         self.__currentTime = None # ms

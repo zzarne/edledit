@@ -3,6 +3,7 @@
 
 # This file is part of edledit.
 # Copyright (C) 2010 Stephane Bidoul
+# Copyright (C) 2018 Arne Zellentin (the Qt5 port)
 #
 # edledit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,8 +24,9 @@ import mimetypes
 import os
 from datetime import timedelta
 
-from PyQt4 import QtCore, QtGui
-from PyQt4.phonon import Phonon
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QComboBox, QLabel, QTimeEdit, QAbstractSpinBox, QMessageBox
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 
 import pyedl
 
@@ -37,7 +39,7 @@ mimetypes.init()
 
 
 def tr(s):
-    return unicode(QtGui.QApplication.translate("@default", s))
+    return unicode(QApplication.translate("@default", s))
 
 
 def timedelta2ms(td):
@@ -48,7 +50,7 @@ def ms2timedelta(ms):
     return timedelta(milliseconds=ms)
 
 
-class MainWindow(QtGui.QMainWindow):
+class MainWindow(QMainWindow):
 
     steps = [
         (40, tr("4 msec")),
@@ -65,28 +67,32 @@ class MainWindow(QtGui.QMainWindow):
     defaultStepIndex = 7
 
     def __init__(self):
-        QtGui.QMainWindow.__init__(self)
+        QMainWindow.__init__(self)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
         self.settings = QtCore.QSettings("bidoul.net", "edledit")
 
+        self.mediaObject = QMediaPlayer()
+        self.mediaObject.setVideoOutput(self.ui.player)
+
         # initialize media components
-        self.mediaObject = self.ui.player.mediaObject()
-        self.mediaObject.setTickInterval(200)
+        self.mediaObject.setNotifyInterval(200)
+        self.mediaObject.mediaStatusChanged.connect(self.mediaStatusChanged)
         self.mediaObject.stateChanged.connect(self.stateChanged)
-        self.mediaObject.tick.connect(self.tick)
-        self.ui.edlWidget.seek.connect(self.ui.player.seek)
+        self.mediaObject.error.connect(self.playerError)
+        self.mediaObject.positionChanged.connect(self.tick)
+        self.ui.edlWidget.seek.connect(self.mediaObject.setPosition)
 
         # add steps combo box and position widget to toolbar
         # (this apparently can't be done in the designer)
-        self.ui.stepCombobox = QtGui.QComboBox(self.ui.toolBar)
-        self.ui.stepLabel = QtGui.QLabel(tr(" Step : "), self.ui.toolBar)
-        self.ui.timeEditCurrentTime = QtGui.QTimeEdit(self.ui.toolBar)
+        self.ui.stepCombobox = QComboBox(self.ui.toolBar)
+        self.ui.stepLabel = QLabel(tr(" Step : "), self.ui.toolBar)
+        self.ui.timeEditCurrentTime = QTimeEdit(self.ui.toolBar)
         self.ui.timeEditCurrentTime.setReadOnly(True)
         self.ui.timeEditCurrentTime.setButtonSymbols(
-            QtGui.QAbstractSpinBox.NoButtons)
-        self.ui.posLabel = QtGui.QLabel(tr(" Position : "), self.ui.toolBar)
+            QAbstractSpinBox.NoButtons)
+        self.ui.posLabel = QLabel(tr(" Position : "), self.ui.toolBar)
         self.ui.timeEditCurrentTime.setDisplayFormat("HH:mm:ss.zzz")
         self.ui.toolBar.addWidget(self.ui.stepLabel)
         self.ui.toolBar.addWidget(self.ui.stepCombobox)
@@ -116,7 +122,7 @@ class MainWindow(QtGui.QMainWindow):
         else:
             self.edl = pyedl.EDL()
         self.edlDirty = False
-        self.ui.edlWidget.setEDL(self.edl, self.ui.player.totalTime())
+        self.ui.edlWidget.setEDL(self.edl, self.mediaObject.duration())
         self.ui.actionSaveEDL.setEnabled(True)
         self.ui.actionStartCut.setEnabled(True)
         self.ui.actionStopCut.setEnabled(True)
@@ -126,7 +132,7 @@ class MainWindow(QtGui.QMainWindow):
     def saveEDL(self):
         assert self.edlFileName
         assert self.edl is not None
-        self.edl.normalize(timedelta(milliseconds=self.ui.player.totalTime()))
+        self.edl.normalize(timedelta(milliseconds=self.mediaObject.duration()))
         pyedl.dump(self.edl, open(self.edlFileName, "w"))
         self.edlChanged(dirty=False)
 
@@ -144,13 +150,13 @@ class MainWindow(QtGui.QMainWindow):
         self.refreshTitle()
 
     def play(self):
-        if not self.ui.player.isPlaying():
-            self.ui.player.play()
+        if not self.mediaObject.state() == QMediaPlayer.PlayingState:
+            self.mediaObject.play()
             self.ui.actionPlayPause.setChecked(True)
 
     def pause(self):
-        if self.ui.player.isPlaying():
-            self.ui.player.pause()
+        if self.mediaObject.state() == QMediaPlayer.PlayingState:
+            self.mediaObject.pause()
             self.ui.actionPlayPause.setChecked(False)
             self.tick()
 
@@ -177,22 +183,23 @@ class MainWindow(QtGui.QMainWindow):
         self.closeEDL()
         self.loading = True
         self.movieFileName = fileName
-        self.ui.player.load(Phonon.MediaSource(self.movieFileName))
+        absolute = QtCore.QFileInfo(self.movieFileName).absoluteFilePath()
+        self.mediaObject.setMedia(QMediaContent(QtCore.QUrl.fromLocalFile(absolute)))
 
     def seekTo(self, pos):
         pos = max(pos, 0)
-        pos = min(pos, self.ui.player.totalTime())
-        self.ui.player.seek(pos)
-        if not self.ui.player.isPlaying():
+        pos = min(pos, self.mediaObject.duration())
+        self.mediaObject.setPosition(pos)
+        if not self.mediaObject.state() == QMediaPlayer.PlayingState:
             self.tick()
 
     def seekStep(self, step):
-        pos = self.ui.player.currentTime() + step
+        pos = self.mediaObject.position() + step
         self.seekTo(pos)
 
     def edlChanged(self, dirty):
         self.edlDirty = dirty
-        self.ui.edlWidget.setEDL(self.edl, self.ui.player.totalTime())
+        self.ui.edlWidget.setEDL(self.edl, self.mediaObject.duration())
         self.refreshTitle()
 
     def refreshTitle(self):
@@ -221,50 +228,67 @@ class MainWindow(QtGui.QMainWindow):
         """
         if not self.edlDirty:
             return True
-        msgBox = QtGui.QMessageBox(self)
-        msgBox.setIcon(QtGui.QMessageBox.Question)
+        msgBox = QMessageBox(self)
+        msgBox.setIcon(QMessageBox.Question)
         msgBox.setText(tr("The current EDL has been modified."))
         msgBox.setInformativeText(tr("Do you want to save your changes?"))
         msgBox.setStandardButtons(
-            QtGui.QMessageBox.Save |
-            QtGui.QMessageBox.Discard | QtGui.QMessageBox.Cancel)
-        msgBox.setDefaultButton(QtGui.QMessageBox.Save)
+            QMessageBox.Save |
+            QMessageBox.Discard | QMessageBox.Cancel)
+        msgBox.setDefaultButton(QMessageBox.Save)
         ret = msgBox.exec_()
-        if ret == QtGui.QMessageBox.Save:
+        if ret == QMessageBox.Save:
             self.saveEDL()
             return True
-        elif ret == QtGui.QMessageBox.Discard:
+        elif ret == QMessageBox.Discard:
             return True
         else:
             return False
 
-    def stateChanged(self, newState, oldState):
-        seekable = self.mediaObject.hasVideo() and self.mediaObject.isSeekable()
+    def stateChanged(self, state):
+        if state == QMediaPlayer.PausedState:
+            if self.loading:
+                self.loading = False
+                self.loadEDL()  # TODO quit if error while loading EDL
+
+    def mediaStatusChanged(self, state):
+        if state == QMediaPlayer.LoadingMedia or state == QMediaPlayer.BufferedMedia:
+            return
+
+        #if state == QMediaPlayer.InvalidMedia:
+            #return playerError()
+
+        if state != QMediaPlayer.LoadedMedia:
+            print "dbg: mediaStatusChanged(%d)" % state
+            return
+
+        seekable = self.mediaObject.isVideoAvailable() and self.mediaObject.isSeekable()
         self.ui.actionPlayPause.setEnabled(seekable)
         self.ui.actionNextCutBoundary.setEnabled(seekable)
         self.ui.actionPreviousCutBoundary.setEnabled(seekable)
         self.ui.actionSkipBackwards.setEnabled(seekable)
         self.ui.actionSkipForward.setEnabled(seekable)
-        if newState == Phonon.StoppedState:
-            if self.loading and oldState != Phonon.ErrorState:
-                self.play()
-        elif newState == Phonon.PlayingState:
-            if self.loading:
-                self.loading = False
-                self.loadEDL()  # TODO quid if error while loading EDL
-        elif newState == Phonon.ErrorState:
-            if self.loading:
-                QtGui.QMessageBox.critical(
-                    self,
-                    tr("Error loading movie file"),
-                    self.mediaObject.errorString())
-                self.loading = False
-                self.mediaObject.stop()
+        self.mediaObject.setPosition(0);
+        self.mediaObject.pause();
+
+    def playerError(self, error):
+        # FormatError can be an unsupported subtitle track. Ignore.
+        if error == QMediaPlayer.FormatError:
+            print "QMultimedia:", self.mediaObject.errorString()
+            return
+
+        if self.loading:
+            QMessageBox.critical(
+                self,
+                tr("Error loading movie file"),
+                self.mediaObject.errorString())
+            self.loading = False
+            self.mediaObject.stop()
 
     def tick(self, timeMs=None):
         if timeMs is None:
-            if self.mediaObject.hasVideo():
-                timeMs = self.ui.player.currentTime()
+            if self.mediaObject.isVideoAvailable():
+                timeMs = self.mediaObject.position()
             else:
                 timeMs = 0
         self.ui.timeEditCurrentTime.setTime(QtCore.QTime(0, 0).addMSecs(timeMs))
@@ -304,16 +328,16 @@ class MainWindow(QtGui.QMainWindow):
 
     def seekNextBoundary(self):
         # self.pause()
-        t = ms2timedelta(self.ui.player.currentTime())
+        t = ms2timedelta(self.mediaObject.position())
         t = self.edl.getNextBoundary(t)
         if t:
             self.seekTo(timedelta2ms(t))
         else:
-            self.seekTo(self.ui.player.totalTime())
+            self.seekTo(self.mediaObject.duration())
 
     def seekPrevBoundary(self):
         # self.pause()
-        t = ms2timedelta(self.ui.player.currentTime())
+        t = ms2timedelta(self.mediaObject.position())
         t = self.edl.getPrevBoundary(t)
         if t:
             self.seekTo(timedelta2ms(t))
@@ -321,28 +345,28 @@ class MainWindow(QtGui.QMainWindow):
             self.seekTo(0)
 
     def togglePlayPause(self):
-        if not self.ui.player.isPlaying():
+        if not self.mediaObject.state() == QMediaPlayer.PlayingState:
             self.play()
         else:
             self.pause()
 
     def cutStart(self):
-        t = timedelta(milliseconds=self.ui.player.currentTime())
+        t = timedelta(milliseconds=self.mediaObject.position())
         self.edl.cutStart(t)
         self.edlChanged(dirty=True)
 
     def cutStop(self):
-        t = timedelta(milliseconds=self.ui.player.currentTime())
+        t = timedelta(milliseconds=self.mediaObject.position())
         self.edl.cutStop(t)
         self.edlChanged(dirty=True)
 
     def cutDelete(self):
-        t = timedelta(milliseconds=self.ui.player.currentTime())
+        t = timedelta(milliseconds=self.mediaObject.position())
         self.edl.deleteBlock(t)
         self.edlChanged(dirty=True)
 
     def cutSetAction(self, action):
-        block = self.edl.findBlock(ms2timedelta(self.ui.player.currentTime()))
+        block = self.edl.findBlock(ms2timedelta(self.mediaObject.position()))
         if block is not None:
             block.action = action
             self.edlChanged(dirty=True)
@@ -378,16 +402,16 @@ class MainWindow(QtGui.QMainWindow):
         AboutDialog(self).exec_()
 
 
-class AboutDialog(QtGui.QDialog):
+class AboutDialog(QDialog):
 
     def __init__(self, *args, **kwargs):
-        QtGui.QDialog.__init__(self, *args, **kwargs)
+        QDialog.__init__(self, *args, **kwargs)
         self.ui = Ui_AboutDialog()
         self.ui.setupUi(self)
         self.ui.labelNameVersion.setText("edledit %s" % __version__)
 
     def license(self):
-        dlg = QtGui.QDialog(self)
+        dlg = QDialog(self)
         ui = Ui_LicenseDialog()
         ui.setupUi(dlg)
         dlg.exec_()
@@ -395,7 +419,7 @@ class AboutDialog(QtGui.QDialog):
 
 def run():
     import sys
-    app = QtGui.QApplication(sys.argv)
+    app = QApplication(sys.argv)
     app.setApplicationName("edledit")
 
     # initialize QT translations

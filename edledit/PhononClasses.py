@@ -17,8 +17,8 @@
 # the only purpose of this file is to compensate for the lack
 # of Phonon widgets in Qt Designer as installed on Ubuntu 10.10
 
-from PyQt4.phonon import Phonon
+from PyQt5.QtMultimediaWidgets import QVideoWidget
 
-class VideoPlayer(Phonon.VideoPlayer):
+class VideoPlayer(QVideoWidget):
     pass
 
