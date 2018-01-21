@@ -1,6 +1,6 @@
 edledit is a GUI program to create and edit Edit Decision Lists (EDL) files.
-edledit is written in python and  uses qt4 and the qt phonon multimedia 
-library (apt-get install python-qt4-phonon should pull everything you need,
+edledit is written in python and  uses qt5 and the qt multimedia library
+(apt-get install python-pyqt5.qtmultimedia should pull everything you need,
 then start it by running edledit/edledit.py).
 
 mkvedlmerge is a program to cut a mkvfile according to an EDL and merge into a
