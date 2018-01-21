@@ -36,12 +36,18 @@ $(SRCDIR)/edledit_about_ui.py: $(SRCDIR)/edledit_about.ui
 $(SRCDIR)/edledit_license_ui.py: $(SRCDIR)/edledit_license.ui
 	pyuic5 -x -o $@ $<
 
-tr: $(SRCDIR)/translations/edledit_fr.qm
+tr: $(SRCDIR)/translations/edledit_fr.qm $(SRCDIR)/translations/edledit_de.qm
 
 $(SRCDIR)/translations/edledit_fr.ts: $(SOURCES)
 	pylupdate5 -verbose $(SOURCES) -ts $@
 
 $(SRCDIR)/translations/edledit_fr.qm: $(SRCDIR)/translations/edledit_fr.ts
+	lrelease $<
+
+$(SRCDIR)/translations/edledit_de.ts: $(SOURCES)
+	pylupdate5 -verbose $(SOURCES) -ts $@
+
+$(SRCDIR)/translations/edledit_de.qm: $(SRCDIR)/translations/edledit_de.ts
 	lrelease $<
 
 res: $(RC_SOURCES)
