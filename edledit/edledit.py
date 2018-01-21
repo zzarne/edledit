@@ -53,8 +53,8 @@ def ms2timedelta(ms):
 class MainWindow(QMainWindow):
 
     steps = [
-        (40, tr("4 msec")),
-        (200, tr("20 msec")),
+        (40, tr("40 msec")),
+        (200, tr("200 msec")),
         (500, tr("0.5 sec")),
         (2000, tr("2 sec")),
         (5000, tr("5 sec")),
@@ -82,6 +82,7 @@ class MainWindow(QMainWindow):
         self.mediaObject.stateChanged.connect(self.stateChanged)
         self.mediaObject.error.connect(self.playerError)
         self.mediaObject.positionChanged.connect(self.tick)
+        self.mediaObject.seekableChanged.connect(self.seekableChanged)
         self.ui.edlWidget.seek.connect(self.mediaObject.setPosition)
 
         # add steps combo box and position widget to toolbar
@@ -155,7 +156,7 @@ class MainWindow(QMainWindow):
             self.ui.actionPlayPause.setChecked(True)
 
     def pause(self):
-        if self.mediaObject.state() == QMediaPlayer.PlayingState:
+        if not self.mediaObject.state() == QMediaPlayer.PausedState:
             self.mediaObject.pause()
             self.ui.actionPlayPause.setChecked(False)
             self.tick()
@@ -187,8 +188,12 @@ class MainWindow(QMainWindow):
         self.mediaObject.setMedia(QMediaContent(QtCore.QUrl.fromLocalFile(absolute)))
 
     def seekTo(self, pos):
+        if pos < 0:
+            pos = self.mediaObject.duration() - pos
         pos = max(pos, 0)
         pos = min(pos, self.mediaObject.duration())
+        if pos > self.mediaObject.duration() - 500:
+            self.pause()
         self.mediaObject.setPosition(pos)
         if not self.mediaObject.state() == QMediaPlayer.PlayingState:
             self.tick()
@@ -251,25 +256,26 @@ class MainWindow(QMainWindow):
                 self.loading = False
                 self.loadEDL()  # TODO quit if error while loading EDL
 
+    def seekableChanged(self, state):
+        self.ui.actionPlayPause.setEnabled(state)
+        self.ui.actionNextCutBoundary.setEnabled(state)
+        self.ui.actionPreviousCutBoundary.setEnabled(state)
+        self.ui.actionSkipBackwards.setEnabled(state)
+        self.ui.actionSkipForward.setEnabled(state)
+        return
+
     def mediaStatusChanged(self, state):
-        if state == QMediaPlayer.LoadingMedia or state == QMediaPlayer.BufferedMedia:
+        print "dbg: mediaStatusChanged(%d)" % state
+
+        if state == QMediaPlayer.EndOfMedia:
+            self.ui.actionPlayPause.setEnabled(False)
+            self.mediaObject.setPosition(self.mediaObject.position())
+            self.pause()
             return
 
-        #if state == QMediaPlayer.InvalidMedia:
-            #return playerError()
-
-        if state != QMediaPlayer.LoadedMedia:
-            print "dbg: mediaStatusChanged(%d)" % state
+        if state == QMediaPlayer.LoadedMedia:
+            self.pause()
             return
-
-        seekable = self.mediaObject.isVideoAvailable() and self.mediaObject.isSeekable()
-        self.ui.actionPlayPause.setEnabled(seekable)
-        self.ui.actionNextCutBoundary.setEnabled(seekable)
-        self.ui.actionPreviousCutBoundary.setEnabled(seekable)
-        self.ui.actionSkipBackwards.setEnabled(seekable)
-        self.ui.actionSkipForward.setEnabled(seekable)
-        self.mediaObject.setPosition(0);
-        self.mediaObject.pause();
 
     def playerError(self, error):
         # FormatError can be an unsupported subtitle track. Ignore.
@@ -286,11 +292,14 @@ class MainWindow(QMainWindow):
             self.mediaObject.stop()
 
     def tick(self, timeMs=None):
+        print "tick:", timeMs
         if timeMs is None:
             if self.mediaObject.isVideoAvailable():
                 timeMs = self.mediaObject.position()
             else:
                 timeMs = 0
+            print "    timeMs:", timeMs
+
         self.ui.timeEditCurrentTime.setTime(QtCore.QTime(0, 0).addMSecs(timeMs))
         self.ui.edlWidget.tick(timeMs)
         if self.edl:
@@ -307,6 +316,9 @@ class MainWindow(QMainWindow):
             self.ui.actionDeleteCut.setEnabled(False)
             self.ui.actionCutSetActionSkip.setEnabled(False)
             self.ui.actionCutSetActionMute.setEnabled(False)
+
+        endOfMedia = timeMs == self.mediaObject.duration()
+        self.ui.actionPlayPause.setEnabled(not endOfMedia)
 
     def smartSeekBackwards(self):
         self.stepDown()
@@ -354,22 +366,26 @@ class MainWindow(QMainWindow):
         t = timedelta(milliseconds=self.mediaObject.position())
         self.edl.cutStart(t)
         self.edlChanged(dirty=True)
+        self.tick()
 
     def cutStop(self):
         t = timedelta(milliseconds=self.mediaObject.position())
         self.edl.cutStop(t)
         self.edlChanged(dirty=True)
+        self.tick()
 
     def cutDelete(self):
         t = timedelta(milliseconds=self.mediaObject.position())
         self.edl.deleteBlock(t)
         self.edlChanged(dirty=True)
+        self.tick()
 
     def cutSetAction(self, action):
         block = self.edl.findBlock(ms2timedelta(self.mediaObject.position()))
         if block is not None:
             block.action = action
             self.edlChanged(dirty=True)
+        self.tick()
 
     def cutSetActionSkip(self):
         self.cutSetAction(pyedl.ACTION_SKIP)
